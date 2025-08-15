@@ -94,6 +94,7 @@ if page == 'Upload & Preprocess':
     if os.path.exists(local_default_path):
         use_local = st.checkbox('Use local app file: /mnt/data/Reviews.csv (faster, no upload)')
 
+
     uploaded_file = None
     if not use_local:
         uploaded_file = st.file_uploader('Upload Reviews.csv (CSV) — recommended <= 200 MB', type=['csv']) #streamlit naturally cannot take files bigger than 200mb
