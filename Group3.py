@@ -205,93 +205,132 @@ if page == 'Upload & Preprocess':
                     st.session_state['df_working'] = working  # store in streamlit's session state for other pages
                     st.write('Stored preprocessed dataframe in session state as `df_working`. Move to the Features & Word Clouds page.') #guides user to the next step
 
-#Features & Word Clouds Page (Page 3)
+# Features & Word Clouds Page (Page 3)
 if page == 'Features & Word Clouds':
     st.header('Feature engineering & Emotion-based Word Clouds')
 
-     # Check that the preprocessed dataframe exists in session state
+    # Check that the preprocessed dataframe exists in session state
     if 'df_working' not in st.session_state:
-        st.warning('No preprocessed dataframe found. Please go to "Upload & Preprocess" and upload/apply preprocessing first.')
+        st.warning(
+            'No preprocessed dataframe found. Please go to "Upload & Preprocess" and upload/apply preprocessing first.')
     else:
         df = st.session_state['df_working']
         st.write('Dataset loaded from session state.')
         st.write(f'Rows: {len(df):,}')
 
-        # Converting numeric ratings into emotion lables on a 1-5 scale ie. mapping: 1-2 -> negative (anger/sadness), 3 -> neutral, 4-5 -> positive (joy)
+
+        # Converting numeric ratings into emotion labels on a 1-5 scale ie. mapping: 1-2 -> negative (anger/sadness), 3 -> neutral, 4-5 -> positive (joy)
         def score_to_emotion(score):
             try:
                 s = float(score)
             except Exception:
                 return 'neutral'  # return neutral if not numeric or invalid scores
             if s <= 2.0:
-                return 'negative' # equal to or below 2, negative
+                return 'negative'  # equal to or below 2, negative
             elif s == 3.0:
-                return 'neutral' # equal to 3, indifferent
+                return 'neutral'  # equal to 3, indifferent
             else:
-                return 'positive' # 4 and 5, positive
+                return 'positive'  # 4 and 5, positive
 
-        if 'Emotion' not in df.columns: # Add an Emotion column if not present
-            df['Emotion'] = df['Score'].apply(score_to_emotion) #maps scores to emotions
+
+        if 'Emotion' not in df.columns:  # Add an Emotion column if not present
+            df['Emotion'] = df['Score'].apply(score_to_emotion)  # maps scores to emotions
             st.session_state['df_working'] = df  # update stored df
 
-        st.write('Emotion label distribution:') # shows distribution of emotion categories, this is to help verify or check the results
+        st.write(
+            'Emotion label distribution:')  # shows distribution of emotion categories, this is to help verify or check the results
         st.write(df['Emotion'].value_counts())
 
         # TF-IDF vectorizer settings (user can change or make tweaks)
         st.subheader('TF-IDF settings')
-        max_features = st.number_input('max_features (TF-IDF)', min_value=1000, max_value=50000, value=10000, step=1000) # controls how many features to keep
-        ngram_range = st.selectbox('ngram_range''---**PLEASE CHOOSE**---'
-                                   'UNIGRAMS(1,1) eg. good, average, bad'' **OR** BIGRAMS(1,2) eg. very good, average performance', options=[(1,1),(1,2)], index=0) # allows choice between unigrams (1,1),or unigrams+bigrams(1,2)
-        #unigrams are single words( 'bad', 'good', 'average') , bigrams are two word phrases ('very good','average performance',bad service')
-        #the default is Unigrams, because it is computationally simple and faster in processing
+        max_features = st.number_input('max_features (TF-IDF)', min_value=1000, max_value=50000, value=10000,
+                                       step=1000)  # controls how many features to keep
+
+        # FIXED: Proper string formatting for selectbox
+        ngram_range = st.selectbox(
+            'ngram_range - Please Choose:',
+            options=[(1, 1), (1, 2)],
+            format_func=lambda x: "UNIGRAMS (1,1) - Single words (e.g., 'good', 'bad')" if x == (1,
+                                                                                                 1) else "BIGRAMS (1,2) - Word pairs (e.g., 'very good', 'bad service')",
+            index=0
+        )
+
         min_df = st.number_input('min_df (int)', min_value=1, max_value=10, value=2)
 
         if st.button('Run TF-IDF & generate word clouds'):
-            texts = df['Text'].astype(str).tolist() # Fit TF-IDF on the Text column, converts text column to list of string
-            tfidf = TfidfVectorizer(max_features=int(max_features), ngram_range=ngram_range, min_df=int(min_df), stop_words='english')
+            texts = df['Text'].astype(
+                str).tolist()  # Fit TF-IDF on the Text column, converts text column to list of string
+            tfidf = TfidfVectorizer(max_features=int(max_features), ngram_range=ngram_range, min_df=int(min_df),
+                                    stop_words='english')
 
             with st.spinner('Fitting TF-IDF...'):
-                X = tfidf.fit_transform(texts)  # Learns vocabulary and computes TF-IDF weights and returns memory efficient sparse matrix (when most values are vero)
+                X = tfidf.fit_transform(
+                    texts)  # Learns vocabulary and computes TF-IDF weights and returns memory efficient sparse matrix
 
             st.success('TF-IDF fitted.')
             st.session_state['tfidf_vectorizer'] = tfidf  # store vectorizer for next page (modeling)
 
             # For each emotion, compute the mean TF-IDF score across documents and create a word cloud
             emotions = df['Emotion'].unique().tolist()
+            # FIXED: Sort emotions for consistent order (negative, neutral, positive)
+            emotion_order = ['negative', 'neutral', 'positive']
+            emotions = [emo for emo in emotion_order if emo in emotions]
+
             st.write(f'Generating word clouds for emotions: {emotions}')
 
-            cols = st.columns(len(emotions)) if len(emotions) <= 3 else None #creates side-by-side columns if 3 or fewer emotions, more than 3 emotions, use vertical layout
+            # FIXED: Create columns layout for up to 3 emotions
+            if len(emotions) <= 3:
+                cols = st.columns(len(emotions))
+            else:
+                cols = None
+
             for i, emo in enumerate(emotions):
-                with st.spinner(f'Processing {emo}...'):  #process each emotion seperately
-                    mask = df['Emotion'] == emo #skip emotions with no documents
+                with st.spinner(f'Processing {emo}...'):
+                    mask = df['Emotion'] == emo
                     if mask.sum() == 0:
-                        st.write(f'No docs for {emo}')
+                        st.write(f'No documents found for {emo} emotion')
                         continue
 
-                    X_sub = X[mask.values] # average TF-IDF weight per feature across documents belonging to this emotion
+                    # Get TF-IDF vectors for this emotion
+                    X_sub = X[mask.values]
 
-                    mean_tfidf = np.asarray(X_sub.mean(axis=0)).ravel() # compute mean tfidf per term
+                    # Compute mean TF-IDF per term
+                    mean_tfidf = np.asarray(X_sub.mean(axis=0)).ravel()
                     terms = tfidf.get_feature_names_out()
                     tfidf_scores = dict(zip(terms, mean_tfidf))
 
-                    # Create a WordCloud from the tfidf_scores frequencies
-                    wc = WordCloud(width=800, height=400, background_color='white')
+                    # Create WordCloud
+                    wc = WordCloud(
+                        width=800,
+                        height=400,
+                        background_color='white',
+                        max_words=100,
+                        colormap='viridis'
+                    )
                     wc.generate_from_frequencies(tfidf_scores)
 
-                    # Display the wordcloud
-                    if cols:
-                        ax = cols[i].pyplot()
-                        fig, ax = plt.subplots(figsize=(8,4))
-                        ax.imshow(wc, interpolation='bilinear')
-                        ax.axis('off')
-                        cols[i].pyplot(fig)
+                    # FIXED: Proper visualization with titles
+                    if cols and i < len(cols):
+                        # Column layout for 3 or fewer emotions
+                        with cols[i]:
+                            st.subheader(f'{emo.capitalize()} Sentiment')
+                            fig, ax = plt.subplots(figsize=(8, 4))
+                            ax.imshow(wc, interpolation='bilinear')
+                            ax.axis('off')
+                            ax.set_title(f'{emo.capitalize()} Words', fontsize=16, pad=20)
+                            st.pyplot(fig)
+                            plt.close(fig)  # FIXED: Close figure to prevent memory issues
                     else:
-                        fig, ax = plt.subplots(figsize=(10,5))
+                        # Vertical layout for more than 3 emotions
+                        st.subheader(f'{emo.capitalize()} Sentiment')
+                        fig, ax = plt.subplots(figsize=(10, 5))
                         ax.imshow(wc, interpolation='bilinear')
                         ax.axis('off')
+                        ax.set_title(f'{emo.capitalize()} Words', fontsize=18, pad=20)
                         st.pyplot(fig)
+                        plt.close(fig)  # FIXED: Close figure to prevent memory issues
 
-            st.success('Word clouds generated and shown above.')
+            st.success('Word clouds generated and displayed above.')
 
 #Modeling & Evaluation Page (Page 4)
 if page == 'Modeling & Evaluation':
