@@ -16,7 +16,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import (precision_score, recall_score, f1_score, roc_auc_score,roc_curve, confusion_matrix, classification_report)
 import joblib                       # saving/loading models mostly for external use
 import streamlit as st              # the Streamlit library
-import fitz                         # PyMuPDF for PDF reading
+# import fitz                         # PyMuPDF for PDF reading
 import kagglehub
 from kagglehub import KaggleDatasetAdapter
 
@@ -498,16 +498,12 @@ if page == 'Manual Sentiment Test':
 
         st.subheader("Upload a file (.txt, .pdf, .csv)") # setting up for a document to be inserted
         st.text_area('NB:CSV must have a Text column,you are advised to rename your CSV column with the reviews as Text')
-        uploaded_file = st.file_uploader("Upload file", type=['txt', 'pdf', 'csv']) #only these theree can be put, nno unsupported file allowed
+        uploaded_file = st.file_uploader("Upload file", type=['txt', 'csv']) #only these there can be put, nno unsupported file allowed
 
         if uploaded_file is not None:
             file_text = ""
             if uploaded_file.type == "text/plain": #direct text extraction for.txt files
                 file_text = uploaded_file.read().decode("utf-8", errors="ignore") #(UTF-8) converts text to this format,(errors="ignnore")skipps errors instead of crashinng
-            elif uploaded_file.type == "application/pdf": #direct text extraction for.pdf files
-                pdf_doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-                for page in pdf_doc:
-                    file_text += page.get_text()
             elif uploaded_file.type == "text/csv": #direct text extraction for.csv files
                 df_uploaded = pd.read_csv(uploaded_file)
                 if 'Text' in df_uploaded.columns: #the leading cell of the file should be named "Text" for it to work
