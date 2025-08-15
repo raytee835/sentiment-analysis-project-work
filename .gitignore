@@ -1,1 +1,3 @@
 .venv
+logistic_model.joblib
+rf_model.joblib
