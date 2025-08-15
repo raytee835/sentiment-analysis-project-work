@@ -16,7 +16,6 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import (precision_score, recall_score, f1_score, roc_auc_score,roc_curve, confusion_matrix, classification_report)
 import joblib                       # saving/loading models mostly for external use
 import streamlit as st              # the Streamlit library
-# import fitz                         # PyMuPDF for PDF reading
 import kagglehub
 from kagglehub import KaggleDatasetAdapter
 
@@ -86,9 +85,7 @@ if page == 'Overview':
 if page == 'Upload & Preprocess':
     st.header('Upload dataset & preprocess')
 
-    st.write('You can either upload the Reviews.csv file here or use a local file placed in the app folder.')
-
-    # Option to use an example local path if present in the environment,ie. directs you to the local environment on your pc
+    # Use an example local path if present in the environment,ie. directs you to the local environment on your pc
     local_default_path = '/mnt/data/Reviews.csv'  # developer-provided upload path
     use_local = False
     if os.path.exists(local_default_path):
@@ -315,7 +312,7 @@ if page == 'Features & Word Clouds':
                         # Column layout for 3 or fewer emotions
                         with cols[i]:
                             st.subheader(f'{emo.capitalize()} Sentiment')
-                            fig, ax = plt.subplots(figsize=(8, 4))
+                            fig, ax = plt.subplots(figsize=(4, 2))
                             ax.imshow(wc, interpolation='bilinear')
                             ax.axis('off')
                             ax.set_title(f'{emo.capitalize()} Words', fontsize=16, pad=20)
