@@ -2,3 +2,4 @@
 logistic_model.joblib
 rf_model.joblib
 .DS_Store
+Reviews.csv

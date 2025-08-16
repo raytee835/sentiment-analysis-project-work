@@ -47,16 +47,15 @@ def read_csv_safe(file_buffer, nrows=None):
 # Define the list of pages and their labels.
 PAGES = [
     'Overview',
-    'Upload & Preprocess',
+    'Load & Preprocess Data',
     'Features & Word Clouds',
     'Modeling & Evaluation',
     'Manual Sentiment Test',
     'Deployment & Notes'
 ]
 
-# Sidebar contains the page navigation.
-st.sidebar.title('Pages')
-page = st.sidebar.selectbox('', PAGES)
+st.sidebar.title('Pages') # Sidebar contains the page navigation.
+page = st.sidebar.radio('', PAGES)
 
 if page == 'Overview':
     st.title('Emotion-Specific Word Clouds — Amazon Fine Food Reviews (TF-IDF)')
@@ -73,86 +72,44 @@ if page == 'Overview':
         - Evaluates using Precision, Recall, F1-score, and ROC-AUC.
 
         **Navigation:** Use the sidebar to move between pages, everything on a page has to be satisfied on a page before continuing to the next. 
-         
-        **Tip:** If your CSV is larger than Streamlit's upload size (commonly 200MB),
-        the app will automatically sample rows to create a working ~200MB dataset.
         """
     )
     st.info('Use the sidebar to go to Upload & Preprocess to start.')
 
 #Upload & Preprocess Page (Page 2)
-#Upload & Preprocess Page (Page 2)
-if page == 'Upload & Preprocess':
-    st.header('Upload dataset & preprocess')
+if page == 'Load & Preprocess Data':
+    st.header('Load & Preprocess Data')
+    st.write('Once you download the "Reviews.csv" dataset from Kaggle and place it in the parent folder, load the data')
 
-    # Use an example local path if present in the environment,ie. directs you to the local environment on your pc
-    local_default_path = '/mnt/data/Reviews.csv'  # developer-provided upload path
+    local_default_path = 'Reviews.csv'
     use_local = False
     if os.path.exists(local_default_path):
-        use_local = st.checkbox('Use local app file: /mnt/data/Reviews.csv (faster, no upload)')
+        use_local = st.checkbox('Use local app file') # developer-provided upload path
 
-
-    uploaded_file = None
-    if not use_local:
-        uploaded_file = st.file_uploader('Upload Reviews.csv (CSV) — recommended <= 200 MB', type=['csv']) #streamlit naturally cannot take files bigger than 200mb
-
-    # If using local file, set buffer to path string; else use uploaded file buffer
-    file_buffer = None  #file buffer will be a container holding the uploaded file
-    source_desc = ''   #makes it readable
-    if use_local:
+    file_buffer = None # Use local file, set buffer to path string; else use uploaded file buffer
+    source_desc = '' #makes it readable
+    if use_local and 'df_raw' not in st.session_state:
         file_buffer = local_default_path
-        source_desc = f'local file at {local_default_path}'  #creates a string showing the file path
-    elif uploaded_file is not None:
-        file_buffer = uploaded_file
-        source_desc = f'uploaded file: {uploaded_file.name}'
+        source_desc = f'local file at {local_default_path}' #creates a string showing the file path
 
-    if file_buffer is None:
-        st.warning('No file selected yet — please upload Reviews.csv or check "Use local app file".') #if nether a local or uploaded fine is available
-    else:
-        approx_mb = None
+        approx_mb = None # Attempt to determine approximate file size. If uploaded file, it's in-memory
         if isinstance(file_buffer, (str, Path)):
-            approx_mb = sizeof_mb(str(file_buffer)) # Attempt to determine approximate file size. If uploaded file, it's in-memory
+            approx_mb = sizeof_mb(str(file_buffer))
         else:
             try:
-                pos = file_buffer.tell() # Uploaded file is a BytesIO-like object; try to seek to compute size
+                pos = file_buffer.tell() # Uploaded file is a BytesIO-like object
             except Exception:
-                pos = None
-            try:
-                file_buffer.seek(0, io.SEEK_END) # finds the end of the file
-                size = file_buffer.tell()
-                file_buffer.seek(0)
-                approx_mb = size / (1024 * 1024) # converts bytes to megabytes
-            except Exception:
-                approx_mb = None # handles if seeking operation fails
+                approx_mb = None
 
         st.write(f'Using dataset from **{source_desc}**') # shows file being used
         if approx_mb:
             st.write(f'Approx. file size: **{approx_mb:.1f} MB**')
 
-        # Streamlit's upload limit is often 200MB. If the file is larger, pick samples from large dataset
-        MAX_MB = 200
+        MAX_MB = 200  # Streamlit's upload limit is often 200MB. If the file is larger, pick samples from large dataset
         df = None
-
         # If the file seems larger than MAX_MB and it's an upload, sample rows
         if approx_mb and approx_mb > MAX_MB and not isinstance(file_buffer, str):
-            st.warning(f'File is larger than {MAX_MB} MB. Sampling rows to keep memory usage low.') # We'll read a small number of rows first to estimate per-row size
-            sample_n = 1000
-            small = read_csv_safe(file_buffer, nrows=sample_n)  # cached read, handles errors and approximate bytes-per-row = size / sample_n
-
-            try:
-                small_bytes = small.to_csv(index=False).encode('utf-8') # convert small dataframe back to csv bytes to estimate size
-                per_row_mb = len(small_bytes) / sample_n / (1024 * 1024) #calculate average megabytes per row
-            except Exception:
-                per_row_mb = 0.00001 # falls back to small value if calculation fails
-            max_rows = int(MAX_MB / per_row_mb)  # compute number of rows to stay under MAX_MB
-            max_rows = max(1000, min(max_rows, 2_000_000)) #prevents extremely small  or extremely large samples
-            st.write(f'Reading approximately **{max_rows:,}** rows (to stay under ~{MAX_MB} MB).') #shows the user how many rows will be read
-
-            try:
-                file_buffer.seek(0)
-            except Exception:
-                pass
-            df = read_csv_safe(file_buffer, nrows=max_rows)
+            df = read_csv_safe(file_buffer)
             st.success(f'Read {len(df):,} rows (sampled from the large upload).') #confirms successful read with actual row count
         else:
             try:
@@ -167,41 +124,43 @@ if page == 'Upload & Preprocess':
                         df = pd.read_csv(file_buffer, encoding='latin-1')
                 except Exception as e2:
                     st.error(f'Failed to read CSV: {e2}')
-                    df = None  #sets df to none if the reading fails
+                    df = None #sets df to none if the reading fails
 
         if df is not None:
-            st.write('Preview of the dataset (first 5 rows):') # If we obtained a dataframe, show a small preview and allow selecting columns
-            st.dataframe(df.head())
+            st.session_state['df_raw'] = df  # ✅ Store raw data in session state
+            st.success('Data loaded and stored in memory. Ready for preprocessing.') # If we obtained a dataframe, show a small preview and allow selecting columns
 
-            expected_cols = ['Text', 'Score'] # Check expected columns: 'Text' containing reviews and 'Score' containing the rating are in the Amazon dataset
-            missing = [c for c in expected_cols if c not in df.columns]
-            # show error for missing columns and success if all are present
-            if missing:
-                st.error(f'The uploaded dataset is missing columns: {missing}. Please ensure it matches the Amazon Fine Food Reviews schema.')
-            else:
-                st.success('Required columns found: Text and Score.')
+    # Show preview if data is loaded
+    if 'df_raw' in st.session_state:
+        st.write('Preview of the dataset (first 5 rows):')
+        st.dataframe(st.session_state['df_raw'].head())
 
-                # Simple preprocessing choices visible to the user
-                st.subheader('Preprocessing options')
-                lowercase = st.checkbox('lowercase text (recommended for model training)', value=True)
-                remove_na = st.checkbox('drop rows with missing Text or Score', value=True)
-                sample_frac = st.slider('Randomly sample fraction of rows for quick experiments', 0.01, 1.0, 1.0) # slider from 1 to 100 percent for experimental sampling
+        expected_cols = ['Text', 'Score']
+        missing = [c for c in expected_cols if c not in st.session_state['df_raw'].columns]
+        if missing:
+            st.error(f'The uploaded dataset is missing columns: {missing}. Please ensure it matches the Amazon Fine Food Reviews schema.')
+        else:
+            st.success('Required columns found: Text and Score.')
 
-                if st.button('Apply preprocessing'): # Apply preprocessing when user clicks the button
-                    working = df.copy() # creates copy to preserve the original data since we just use random samples
-                    if remove_na:
-                        working = working.dropna(subset=['Text', 'Score']) # removes rows where there is nothing in 'Text' and 'Score' column
-                    if lowercase:
-                        working['Text'] = working['Text'].astype(str).str.lower()
+            st.subheader('Preprocessing options') # Simple preprocessing choices visible to the user
+            lowercase = st.checkbox('lowercase text (recommended for model training)', value=True)
+            remove_na = st.checkbox('drop rows with missing Text or Score', value=True)
+            sample_frac = st.slider('Randomly sample fraction of rows for quick experiments', 0.01, 1.0, 1.0)
 
-                    if sample_frac < 1.0:
-                        working = working.sample(frac=sample_frac, random_state=42).reset_index(drop=True) #if less than 100% selected, randomly select rows
-                    else:
-                        working = working.reset_index(drop=True) # after selecting, the index is reset to be able to reselect for another user
+            if st.button('Apply preprocessing'): # Apply preprocessing when user clicks the button
+                df = st.session_state['df_raw'].copy() # creates copy to preserve the original data since we just use random samples
+                if remove_na:
+                    df = df.dropna(subset=['Text', 'Score']) # removes rows where there is nothing in 'Text' and 'Score' column
+                if lowercase:
+                    df['Text'] = df['Text'].astype(str).str.lower()
+                if sample_frac < 1.0:
+                    df = df.sample(frac=sample_frac, random_state=42).reset_index(drop=True) #if less than 100% selected, randomly select rows
+                else:
+                    df = df.reset_index(drop=True) # after selecting, the index is reset to be able to reselect for another user
 
-                    st.success(f'Preprocessing applied. Dataset now has {len(working):,} rows.') # shows success with final row count
-                    st.session_state['df_working'] = working  # store in streamlit's session state for other pages
-                    st.write('Stored preprocessed dataframe in session state as `df_working`. Move to the Features & Word Clouds page.') #guides user to the next step
+                st.session_state['df_working'] = df # store in streamlit's session state for other pages
+                st.success(f'Preprocessing applied. Dataset now has {len(df):,} rows.') # store in streamlit's session state for other pages
+                st.write('Stored preprocessed dataframe in session state as `df_working`. Move to the Features & Word Clouds page.') #guides user to the next step
 
 # Features & Word Clouds Page (Page 3)
 if page == 'Features & Word Clouds':
@@ -215,7 +174,6 @@ if page == 'Features & Word Clouds':
         df = st.session_state['df_working']
         st.write('Dataset loaded from session state.')
         st.write(f'Rows: {len(df):,}')
-
 
         # Converting numeric ratings into emotion labels on a 1-5 scale ie. mapping: 1-2 -> negative (anger/sadness), 3 -> neutral, 4-5 -> positive (joy)
         def score_to_emotion(score):
@@ -248,11 +206,9 @@ if page == 'Features & Word Clouds':
         ngram_range = st.selectbox(
             'ngram_range - Please Choose:',
             options=[(1, 1), (1, 2)],
-            format_func=lambda x: "UNIGRAMS (1,1) - Single words (e.g., 'good', 'bad')" if x == (1,
-                                                                                                 1) else "BIGRAMS (1,2) - Word pairs (e.g., 'very good', 'bad service')",
+            format_func=lambda x: "UNIGRAMS (1,1) - Single words (e.g., 'good', 'bad')" if x == (1,1) else "BIGRAMS (1,2) - Word pairs (e.g., 'very good', 'bad service')",
             index=0
         )
-
         min_df = st.number_input('min_df (int)', min_value=1, max_value=10, value=2)
 
         if st.button('Run TF-IDF & generate word clouds'):
@@ -261,7 +217,7 @@ if page == 'Features & Word Clouds':
             tfidf = TfidfVectorizer(max_features=int(max_features), ngram_range=ngram_range, min_df=int(min_df),
                                     stop_words='english')
 
-            with st.spinner('Fitting TF-IDF...'):
+            with st.spinner('Fitting TF-IDF...'): #shows when it is loading
                 X = tfidf.fit_transform(
                     texts)  # Learns vocabulary and computes TF-IDF weights and returns memory efficient sparse matrix
 
@@ -270,10 +226,8 @@ if page == 'Features & Word Clouds':
 
             # For each emotion, compute the mean TF-IDF score across documents and create a word cloud
             emotions = df['Emotion'].unique().tolist()
-            # FIXED: Sort emotions for consistent order (negative, neutral, positive)
             emotion_order = ['negative', 'neutral', 'positive']
             emotions = [emo for emo in emotion_order if emo in emotions]
-
             st.write(f'Generating word clouds for emotions: {emotions}')
 
             # FIXED: Create columns layout for up to 3 emotions
@@ -281,7 +235,6 @@ if page == 'Features & Word Clouds':
                 cols = st.columns(len(emotions))
             else:
                 cols = None
-
             for i, emo in enumerate(emotions):
                 with st.spinner(f'Processing {emo}...'):
                     mask = df['Emotion'] == emo
@@ -289,8 +242,7 @@ if page == 'Features & Word Clouds':
                         st.write(f'No documents found for {emo} emotion')
                         continue
 
-                    # Get TF-IDF vectors for this emotion
-                    X_sub = X[mask.values]
+                    X_sub = X[mask.values] # Get TF-IDF vectors for this emotion
 
                     # Compute mean TF-IDF per term
                     mean_tfidf = np.asarray(X_sub.mean(axis=0)).ravel()
@@ -413,7 +365,7 @@ if page == 'Modeling & Evaluation':
 
             # Confusion matrix visualization, shows actual vs predicted classifications
             cm = confusion_matrix(y_test, y_pred)
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(2.5, 2.5))
             im = ax.imshow(cm, interpolation='nearest')
             ax.set_title('Confusion matrix')
             ax.set_xticks(np.arange(len(le.classes_)))
@@ -426,12 +378,13 @@ if page == 'Modeling & Evaluation':
                     ax.text(j, i, format(cm[i, j], 'd'), ha='center', va='center')
             st.pyplot(fig)
 
+
             # If we have probabilities and binary case, plot ROC curve for each class
             try:
                 if y_score is not None:
                     if y_score.shape[1] == 2: # If multiclass: skip detailed ROC curve plotting here
                         fpr, tpr, _ = roc_curve(y_test, y_score[:,1])
-                        fig2, ax2 = plt.subplots()
+                        fig2, ax2 = plt.subplots(figsize=(2.5, 2.5))
                         ax2.plot(fpr, tpr)
                         ax2.set_title('ROC curve')
                         ax2.set_xlabel('False Positive Rate')
@@ -525,9 +478,9 @@ if page == 'Manual Sentiment Test':
 
 #Deployment & Notes Page (Page 5)
 if page == 'Deployment & Notes':
-    st.header('Deploying the app and innovation ideas')
+    st.header('Deploying the app and Information on Project Setup')
 
-    st.write('This section contains practical deployment instructions and suggestions for innovative extensions that attract more marks.')
+    st.write('This section contains practical deployment instructions, how to set up the project and also how to reproduce the saved model.')
 
     st.subheader('Requirements')
     st.write('You will typically need to install:')
@@ -539,37 +492,29 @@ if page == 'Deployment & Notes':
         'matplotlib',
         'wordcloud',
         'joblib'
+        'kagglehub'
     ]))
 
-    st.subheader('Deploy to Streamlit Community')
-    st.write(
-        """
-        1. Push this repository (with streamlit_app.py and a requirements.txt) to GitHub.
-        2. Go to https://share.streamlit.io and connect your GitHub repo.
-        3. Choose the branch and file `streamlit_app.py` as the app entrypoint.
-        4. For large datasets, place `Reviews.csv` if it exceeds the limit use `Reviews_trimmed.csv` in the repo or use external storage and fetch it at runtime.
-        """
-    )
-
-    st.subheader('Deploy to other free platforms')
-    st.write('- GitHub Pages: not suitable for Python apps (static).')
-    st.write('- Hugging Face Spaces: supports Streamlit apps (free quota). Push the repo to GitHub and import it to HF Spaces.')
-
-    st.subheader('Innovation suggestions (higher marks)')
-    st.write('- Use a proper emotion lexicon (NRC or EmoLex) to map text -> emotions rather than coarse star mapping.')
-    st.write('- Add an explainability module (SHAP) to show which words influenced predictions.')
-    st.write('- Add an interactive dashboard showing per-emotion trends over time.')
-    st.write('- Use embeddings (e.g., sentence-transformers) and cluster emotions to discover latent emotions.')
+    st.subheader('Project Setup')
+    st.write('- download the dataset from kaggle using this link: https://www.kaggle.com/datasets/snap/amazon-fine-food-reviews/')
+    st.write('- create a virtual environment for the project using this command python -m venv <environment_name>')
+    st.write('- install the packages using the requirements.txt file using the pip install -r requirements.tx')
+    st.write('- to run the application, run streamlit run TextAmazon.py')
 
     st.subheader('Notes on reproducibility')
     st.write('Save fitted TF-IDF and trained models using joblib and commit small example datasets to the repo for testing.')
 
     st.success('End of app notes. Navigate back using the sidebar.')
 
-    #End of app
     #Helpful tip printed to the app (not a title on each page)
     st.caption('Streamlit app: Emotion WordClouds — TF-IDF + Logistic Regression & Random Forest')
 
 
-
+st.sidebar.markdown("___")
+st.sidebar.markdown("**PROJECT TEAM**")
+st.sidebar.markdown("Raymond Tetteh (22255065)")
+st.sidebar.markdown("Rebecca Boakyewaa Anderson (11410707)")
+st.sidebar.markdown("Rene Dwamena (11410590)")
+st.sidebar.markdown("Rowland Walker Mensah (22252448)")
+st.sidebar.markdown("Ricky Nelson Adzakpa (11410541)")
 
