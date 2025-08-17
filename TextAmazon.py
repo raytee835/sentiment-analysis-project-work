@@ -378,7 +378,6 @@ if page == 'Modeling & Evaluation':
                     ax.text(j, i, format(cm[i, j], 'd'), ha='center', va='center')
             st.pyplot(fig)
 
-
             # If we have probabilities and binary case, plot ROC curve for each class
             try:
                 if y_score is not None:
@@ -461,7 +460,6 @@ if page == 'Manual Sentiment Test':
                 else:
                     st.error("CSV must have a 'Text' column.")
 
-
             if file_text.strip():
                 lines = [line.strip() for line in file_text.split("\n") if line.strip()]
                 X_input = tfidf.transform(lines)
@@ -508,7 +506,6 @@ if page == 'Deployment & Notes':
 
     #Helpful tip printed to the app (not a title on each page)
     st.caption('Streamlit app: Emotion WordClouds — TF-IDF + Logistic Regression & Random Forest')
-
 
 st.sidebar.markdown("___")
 st.sidebar.markdown("**PROJECT TEAM**")
